@@ -1,16 +1,31 @@
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class Main {
-    public static final int COUNT = 50;
+    public static final int COUNT = 100;
     public static final Map<Integer, Integer> sizeToFreq = new HashMap<>();
     public static void main(String[] args) throws InterruptedException {
         List<Thread> threads = new ArrayList<>();
+
+        Thread threadMax = new Thread(() -> {
+            while (!Thread.interrupted()) {
+                synchronized (sizeToFreq) {
+                    try {
+                        sizeToFreq.wait();
+                        System.out.println("Лидер среди частот: " + Collections.max(sizeToFreq.keySet()));
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+        });
+        threadMax.start();
+
         for (int i = 0; i < COUNT; ++i) {
             Thread thread = new Thread(() -> {
-                int freq = countR(generateRoute("RLRFR", 100));
+                countR(generateRoute("RLRFR", COUNT));
                 synchronized (sizeToFreq) {
-                    sizeToFreq.putIfAbsent(freq, 0);
-                    sizeToFreq.put(freq, sizeToFreq.get(freq) + 1);
+                    sizeToFreq.notify();
                 }
             });
             threads.add(thread);
@@ -21,12 +36,14 @@ public class Main {
             thread.join();
         }
 
+        threadMax.interrupt();
+
         int maxFreq = Collections.max(sizeToFreq.keySet());
         System.out.println(sizeToFreq);
         System.out.println("Самое частое количество повторений " + maxFreq + " (встретилось " + sizeToFreq.get(maxFreq) + " раз)");
         System.out.println("Другие размеры: ");
         sizeToFreq.forEach((key, value) -> {
-            if (key != maxFreq) System.out.println("- " + key + "(" + value + ") раз");
+            if (key != maxFreq) System.out.println("- " + key + " (" + value + ") раз");
         });
 
     }
@@ -38,13 +55,16 @@ public class Main {
         }
         return route.toString();
     }
-    public static int countR(String commands) {
+    public static void countR(String commands) {
         int count = 0;
         for (char command : commands.toCharArray()) {
             if (command == 'R') {
                 ++count;
             }
         }
-        return count;
+        synchronized (sizeToFreq) {
+            sizeToFreq.putIfAbsent(count, 0);
+            sizeToFreq.put(count, sizeToFreq.get(count) + 1);
+        }
     }
 }
